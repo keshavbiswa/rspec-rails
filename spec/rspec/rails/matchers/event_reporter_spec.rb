@@ -63,5 +63,11 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
         }.to have_reported_event("user.created").with_payload(id: 123)
       }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
     end
+
+    it "raises ArgumentError when with_payload is called with non-Hash" do
+      expect {
+        have_reported_event("user.created").with_payload("invalid")
+      }.to raise_error(ArgumentError, /with_payload requires a Hash/)
+    end
   end
 end

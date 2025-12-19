@@ -116,7 +116,12 @@ module RSpec
           #
           # @param payload [Hash] expected payload keys and values
           # @return [HaveReportedEvent] self for chaining
+          # @raise [ArgumentError] if payload is not a Hash
           def with_payload(payload)
+            unless payload.is_a?(Hash)
+              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
+            end
+
             @expected_payload = payload
             self
           end
