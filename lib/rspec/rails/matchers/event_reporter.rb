@@ -122,6 +122,10 @@ module RSpec
 
             raise ArgumentError, "#{method_name} requires a Hash, got #{value.class}"
           end
+
+          def formatted_events
+            @events.map { |e| "  #{e.inspect}" }.join("\n")
+          end
         end
 
         # @api private
@@ -186,13 +190,12 @@ module RSpec
             when :no_events
               "expected an event to be reported, but there were no events reported"
             when :no_match
-              lines = ["expected an event to be reported matching:"]
-              lines << "  name: #{@expected_name.inspect}" if @expected_name
-              lines << "  payload: #{@expected_payload.inspect}" if @expected_payload
-              lines << "  tags: #{@expected_tags.inspect}" if @expected_tags
-              lines << "but none of the #{@events.size} reported event(s) matched:"
-              lines.concat(@events.map { |e| "  #{e.inspect}" })
-              lines.join("\n")
+              <<~MSG.chomp
+                expected an event to be reported matching:
+                #{expectation_details}
+                but none of the #{@events.size} reported event(s) matched:
+                #{formatted_events}
+              MSG
             end
           end
 
@@ -210,6 +213,16 @@ module RSpec
             desc += " with payload #{@expected_payload.inspect}" if @expected_payload
             desc += " with tags #{@expected_tags.inspect}" if @expected_tags
             desc
+          end
+
+          private
+
+          def expectation_details
+            details = []
+            details << "  name: #{@expected_name.inspect}" if @expected_name
+            details << "  payload: #{@expected_payload.inspect}" if @expected_payload
+            details << "  tags: #{@expected_tags.inspect}" if @expected_tags
+            details.join("\n")
           end
         end
 
@@ -265,11 +278,15 @@ module RSpec
 
           def failure_message
             if has_filters?
-              "expected no event matching #{match_description} to be reported, but found:\n  #{@matching_event.inspect}"
+              <<~MSG.chomp
+                expected no event matching #{match_description} to be reported, but found:
+                  #{@matching_event.inspect}
+              MSG
             else
-              lines = ["expected no events to be reported, but #{@events.size} event(s) were reported:"]
-              lines.concat(@events.map { |e| "  #{e.inspect}" })
-              lines.join("\n")
+              <<~MSG.chomp
+                expected no events to be reported, but #{@events.size} event(s) were reported:
+                #{formatted_events}
+              MSG
             end
           end
 
@@ -292,7 +309,7 @@ module RSpec
           private
 
           def has_filters?
-            @expected_name || @expected_payload || @expected_tags
+            !!(@expected_name || @expected_payload || @expected_tags)
           end
 
           def match_description
