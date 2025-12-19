@@ -156,6 +156,14 @@ module RSpec
           def formatted_events
             @events.map { |e| "  #{e.inspect}" }.join("\n")
           end
+
+          def format_event_criteria(name: nil, payload: nil, tags: nil)
+            parts = []
+            parts << "name: #{name.inspect}" if name
+            parts << "payload: #{payload.inspect}" if payload
+            parts << "tags: #{tags.inspect}" if tags
+            parts.join(", ")
+          end
         end
 
         # @api private
@@ -291,11 +299,11 @@ module RSpec
           end
 
           def match_description
-            parts = []
-            parts << "name: #{@expected_name.inspect}" if @expected_name
-            parts << "payload: #{@expected_payload.inspect}" if @expected_payload
-            parts << "tags: #{@expected_tags.inspect}" if @expected_tags
-            parts.join(", ")
+            format_event_criteria(
+              name: @expected_name,
+              payload: @expected_payload,
+              tags: @expected_tags
+            )
           end
         end
 
@@ -313,14 +321,13 @@ module RSpec
           def matches?(block)
             @events = EventCollector.record(&block)
 
-            if @events.empty?
-              @failure_reason = :no_events
-              return false
-            end
-
             @missing_events = find_missing_events
+
             if @missing_events.empty?
               true
+            elsif @events.empty?
+              @failure_reason = :no_events
+              false
             else
               @failure_reason = :missing_events
               false
@@ -371,15 +378,9 @@ module RSpec
           end
 
           def formatted_missing_events
-            @missing_events.map { |e| "  #{format_expected_event(e)}" }.join("\n")
-          end
-
-          def format_expected_event(expected)
-            parts = []
-            parts << "name: #{expected[:name].inspect}" if expected[:name]
-            parts << "payload: #{expected[:payload].inspect}" if expected[:payload]
-            parts << "tags: #{expected[:tags].inspect}" if expected[:tags]
-            parts.join(", ")
+            @missing_events.map do |e|
+              "  #{format_event_criteria(name: e[:name], payload: e[:payload], tags: e[:tags])}"
+            end.join("\n")
           end
         end
       end

@@ -270,6 +270,10 @@ end
 
 RSpec.describe "have_reported_events", skip: !RSpec::Rails::FeatureCheck.has_event_reporter? do
   describe "basic matching" do
+    it "passes when no events expected and none reported" do
+      expect { }.to have_reported_events([])
+    end
+
     it "passes when all events are reported" do
       expect {
         Rails.event.notify("user.created", { id: 123 })
