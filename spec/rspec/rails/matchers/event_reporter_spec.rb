@@ -70,4 +70,54 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
       }.to raise_error(ArgumentError, /with_payload requires a Hash/)
     end
   end
+
+  describe "with tags matching" do
+    it "passes with matching tags" do
+      expect {
+        Rails.event.tagged(request_id: "abc123") do
+          Rails.event.notify("user.created", { id: 123 })
+        end
+      }.to have_reported_event("user.created").with_tags(request_id: "abc123")
+    end
+
+    it "passes with regex tag matching" do
+      expect {
+        Rails.event.tagged(request_id: "abc123") do
+          Rails.event.notify("user.created", { id: 123 })
+        end
+      }.to have_reported_event("user.created").with_tags(request_id: /[a-z0-9]+/)
+    end
+
+    it "passes with partial tag matching" do
+      expect {
+        Rails.event.tagged(request_id: "abc123", user_id: 456) do
+          Rails.event.notify("user.created", { id: 123 })
+        end
+      }.to have_reported_event("user.created").with_tags(request_id: "abc123")
+    end
+
+    it "fails when tags don't match" do
+      expect {
+        expect {
+          Rails.event.tagged(request_id: "xyz") do
+            Rails.event.notify("user.created", { id: 123 })
+          end
+        }.to have_reported_event("user.created").with_tags(request_id: "abc123")
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
+    it "fails when event has no tags" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 123 })
+        }.to have_reported_event("user.created").with_tags(request_id: "abc123")
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
+    it "raises ArgumentError when with_tags is called with non-Hash" do
+      expect {
+        have_reported_event("user.created").with_tags("invalid")
+      }.to raise_error(ArgumentError, /with_tags requires a Hash/)
+    end
+  end
 end

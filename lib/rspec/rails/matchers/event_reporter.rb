@@ -66,12 +66,13 @@ module RSpec
           end
 
           def inspect
-            "#{event_data[:name]} (payload: #{event_data[:payload].inspect})"
+            "#{event_data[:name]} (payload: #{event_data[:payload].inspect}, tags: #{event_data[:tags].inspect})"
           end
 
-          def matches?(name, payload = nil)
+          def matches?(name, payload = nil, tags = nil)
             return false if name && name.to_s != event_data[:name]
             return false if payload && !matches_payload?(payload)
+            return false if tags && !matches_tags?(tags)
 
             true
           end
@@ -83,6 +84,19 @@ module RSpec
 
             expected_payload.all? do |key, value|
               event_data[:payload][key] == value
+            end
+          end
+
+          def matches_tags?(expected_tags)
+            return false unless event_data[:tags].is_a?(Hash)
+
+            expected_tags.all? do |key, value|
+              actual_value = event_data[:tags][key]
+              if value.is_a?(Regexp)
+                actual_value.to_s.match?(value)
+              else
+                actual_value == value
+              end
             end
           end
         end
@@ -109,6 +123,7 @@ module RSpec
             super()
             @expected_name = expected_name
             @expected_payload = nil
+            @expected_tags = nil
           end
 
           # @api public
@@ -126,6 +141,21 @@ module RSpec
             self
           end
 
+          # @api public
+          # Specifies the expected tags (supports Regexp values)
+          #
+          # @param tags [Hash] expected tag keys and values (values can be Regexp)
+          # @return [HaveReportedEvent] self for chaining
+          # @raise [ArgumentError] if tags is not a Hash
+          def with_tags(tags)
+            unless tags.is_a?(Hash)
+              raise ArgumentError, "with_tags requires a Hash, got #{tags.class}"
+            end
+
+            @expected_tags = tags
+            self
+          end
+
           def matches?(block)
             @events = EventCollector.record(&block)
 
@@ -135,7 +165,7 @@ module RSpec
             end
 
             @matching_event = @events.find do |event|
-              event.matches?(@expected_name, @expected_payload)
+              event.matches?(@expected_name, @expected_payload, @expected_tags)
             end
 
             if @matching_event
@@ -154,6 +184,7 @@ module RSpec
               lines = ["expected an event to be reported matching:"]
               lines << "  name: #{@expected_name.inspect}" if @expected_name
               lines << "  payload: #{@expected_payload.inspect}" if @expected_payload
+              lines << "  tags: #{@expected_tags.inspect}" if @expected_tags
               lines << "but none of the #{@events.size} reported event(s) matched:"
               lines.concat(@events.map { |e| "  #{e.inspect}" })
               lines.join("\n")
@@ -164,6 +195,7 @@ module RSpec
             desc = "report event"
             desc += " #{@expected_name.inspect}" if @expected_name
             desc += " with payload #{@expected_payload.inspect}" if @expected_payload
+            desc += " with tags #{@expected_tags.inspect}" if @expected_tags
             desc
           end
         end
@@ -180,6 +212,14 @@ module RSpec
       #   expect { Rails.event.notify("user.created", { id: 123, name: "John" }) }
       #     .to have_reported_event("user.created")
       #     .with_payload(id: 123)
+      #
+      # @example With tags matching (supports Regexp)
+      #   expect {
+      #     Rails.event.tagged(request_id: "abc123") do
+      #       Rails.event.notify("user.created", { id: 123 })
+      #     end
+      #   }.to have_reported_event("user.created")
+      #     .with_tags(request_id: /[a-z0-9]+/)
       #
       # @param name [String, Symbol] the expected event name
       # @return [HaveReportedEvent]
