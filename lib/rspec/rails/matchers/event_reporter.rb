@@ -107,12 +107,54 @@ module RSpec
         # @api private
         # Base class for event reporter matchers.
         class Base < RSpec::Rails::Matchers::BaseMatcher
+          def initialize
+            super()
+            @expected_payload = nil
+            @expected_tags = nil
+          end
+
           def supports_value_expectations?
             false
           end
 
           def supports_block_expectations?
             true
+          end
+
+          # @api public
+          # Specifies the expected payload.
+          #
+          # @param payload [Hash] expected payload keys and values
+          # @return [self] self for chaining
+          # @raise [ArgumentError] if payload is not a Hash
+          def with_payload(payload)
+            require_hash_argument(payload, :with_payload)
+            @expected_payload = payload
+            self
+          end
+
+          # @api public
+          # Specifies the expected tags (supports Regexp values for matching).
+          #
+          # @param tags [Hash] expected tag keys and values (values can be Regexp)
+          # @return [self] self for chaining
+          # @raise [ArgumentError] if tags is not a Hash
+          def with_tags(tags)
+            require_hash_argument(tags, :with_tags)
+            @expected_tags = tags
+            self
+          end
+
+          private
+
+          def require_hash_argument(value, method_name)
+            return if value.is_a?(Hash)
+
+            raise ArgumentError, "#{method_name} requires a Hash, got #{value.class}"
+          end
+
+          def formatted_events
+            @events.map { |e| "  #{e.inspect}" }.join("\n")
           end
         end
 
@@ -125,38 +167,6 @@ module RSpec
           def initialize(expected_name)
             super()
             @expected_name = expected_name
-            @expected_payload = nil
-            @expected_tags = nil
-          end
-
-          # @api public
-          # Specifies the expected payload
-          #
-          # @param payload [Hash] expected payload keys and values
-          # @return [HaveReportedEvent] self for chaining
-          # @raise [ArgumentError] if payload is not a Hash
-          def with_payload(payload)
-            unless payload.is_a?(Hash)
-              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
-            end
-
-            @expected_payload = payload
-            self
-          end
-
-          # @api public
-          # Specifies the expected tags (supports Regexp values)
-          #
-          # @param tags [Hash] expected tag keys and values (values can be Regexp)
-          # @return [HaveReportedEvent] self for chaining
-          # @raise [ArgumentError] if tags is not a Hash
-          def with_tags(tags)
-            unless tags.is_a?(Hash)
-              raise ArgumentError, "with_tags requires a Hash, got #{tags.class}"
-            end
-
-            @expected_tags = tags
-            self
           end
 
           def matches?(block)
@@ -184,13 +194,12 @@ module RSpec
             when :no_events
               "expected an event to be reported, but there were no events reported"
             when :no_match
-              lines = ["expected an event to be reported matching:"]
-              lines << "  name: #{@expected_name.inspect}" if @expected_name
-              lines << "  payload: #{@expected_payload.inspect}" if @expected_payload
-              lines << "  tags: #{@expected_tags.inspect}" if @expected_tags
-              lines << "but none of the #{@events.size} reported event(s) matched:"
-              lines.concat(@events.map { |e| "  #{e.inspect}" })
-              lines.join("\n")
+              <<~MSG.chomp
+                expected an event to be reported matching:
+                #{expectation_details}
+                but none of the #{@events.size} reported event(s) matched:
+                #{formatted_events}
+              MSG
             end
           end
 
@@ -208,6 +217,85 @@ module RSpec
             desc += " with payload #{@expected_payload.inspect}" if @expected_payload
             desc += " with tags #{@expected_tags.inspect}" if @expected_tags
             desc
+          end
+
+          private
+
+          def expectation_details
+            details = []
+            details << "  name: #{@expected_name.inspect}" if @expected_name
+            details << "  payload: #{@expected_payload.inspect}" if @expected_payload
+            details << "  tags: #{@expected_tags.inspect}" if @expected_tags
+            details.join("\n")
+          end
+        end
+
+        # @api private
+        #
+        # Matcher class for `have_reported_no_event`. Should not be instantiated directly.
+        #
+        # @see RSpec::Rails::Matchers#have_reported_no_event
+        class HaveReportedNoEvent < Base
+          def initialize(expected_name = nil)
+            super()
+            @expected_name = expected_name
+          end
+
+          def matches?(block)
+            @events = EventCollector.record(&block)
+
+            if has_filters?
+              @matching_event = @events.find do |event|
+                event.matches?(@expected_name, @expected_payload, @expected_tags)
+              end
+              @matching_event.nil?
+            else
+              @events.empty?
+            end
+          end
+
+          def failure_message
+            if has_filters?
+              <<~MSG.chomp
+                expected no event matching #{match_description} to be reported, but found:
+                  #{@matching_event.inspect}
+              MSG
+            else
+              <<~MSG.chomp
+                expected no events to be reported, but #{@events.size} event(s) were reported:
+                #{formatted_events}
+              MSG
+            end
+          end
+
+          def failure_message_when_negated
+            if has_filters?
+              "expected an event matching #{match_description} to be reported, but none were found"
+            else
+              "expected at least one event to be reported, but none were"
+            end
+          end
+
+          def description
+            if has_filters?
+              "report no event matching #{match_description}"
+            else
+              "report no events"
+            end
+          end
+
+          private
+
+          def has_filters?
+            !!(@expected_name || @expected_payload || @expected_tags)
+          end
+
+          def match_description
+            parts = []
+            parts << "name: #{@expected_name.inspect}" if @expected_name
+            parts << "payload: #{@expected_payload.inspect}" if @expected_payload
+            parts << "tags: #{@expected_tags.inspect}" if @expected_tags
+            parts.join(", ")
           end
         end
       end
@@ -236,6 +324,27 @@ module RSpec
       # @return [HaveReportedEvent]
       def have_reported_event(name = nil)
         EventReporter::HaveReportedEvent.new(name)
+      end
+
+      # @api public
+      # Passes if the block reports no events (or no events matching the criteria).
+      #
+      # @example Basic usage - no events at all
+      #   expect { }.to have_reported_no_event
+      #
+      # @example With specific event name
+      #   expect { Rails.event.notify("other.event", {}) }
+      #     .to have_reported_no_event("user.created")
+      #
+      # @example With payload filtering
+      #   expect { Rails.event.notify("user.created", { id: 456 }) }
+      #     .to have_reported_no_event("user.created")
+      #     .with_payload(id: 123)
+      #
+      # @param name [String, Symbol, nil] the event name to filter (optional)
+      # @return [HaveReportedNoEvent]
+      def have_reported_no_event(name = nil)
+        EventReporter::HaveReportedNoEvent.new(name)
       end
     end
   end
