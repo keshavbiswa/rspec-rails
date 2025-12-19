@@ -461,6 +461,30 @@ module RSpec
       def have_reported_events(expected_events)
         EventReporter::HaveReportedEvents.new(expected_events)
       end
+
+      # @api public
+      # Temporarily enables debug mode for the event reporter within the block.
+      # This allows debug events (reported via `Rails.event.debug`) to be captured
+      # and tested.
+      #
+      # @example Testing debug events
+      #   with_debug_event_reporting do
+      #     expect {
+      #       Rails.event.debug("debug.info", { data: "test" })
+      #     }.to have_reported_event("debug.info")
+      #   end
+      #
+      # @yield The block within which debug mode is enabled
+      # @return [Object] the result of the block
+      def with_debug_event_reporting
+        original_debug_mode = ActiveSupport.event_reporter.debug_mode?
+        ActiveSupport.event_reporter.debug_mode = true
+        begin
+          yield
+        ensure
+          ActiveSupport.event_reporter.debug_mode = original_debug_mode
+        end
+      end
     end
   end
 end
