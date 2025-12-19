@@ -80,22 +80,23 @@ module RSpec
           private
 
           def matches_payload?(expected_payload)
-            return false unless event_data[:payload].is_a?(Hash)
-
-            expected_payload.all? do |key, value|
-              event_data[:payload][key] == value
-            end
+            matches_hash?(expected_payload, :payload, allow_regexp: false)
           end
 
           def matches_tags?(expected_tags)
-            return false unless event_data[:tags].is_a?(Hash)
+            matches_hash?(expected_tags, :tags, allow_regexp: true)
+          end
 
-            expected_tags.all? do |key, value|
-              actual_value = event_data[:tags][key]
-              if value.is_a?(Regexp)
-                actual_value.to_s.match?(value)
+          def matches_hash?(expected, key, allow_regexp:)
+            actual = event_data[key]
+            return false unless actual.is_a?(Hash)
+
+            expected.all? do |k, v|
+              actual_value = actual[k]
+              if allow_regexp && v.is_a?(Regexp)
+                actual_value.to_s.match?(v)
               else
-                actual_value == value
+                actual_value == v
               end
             end
           end
