@@ -114,6 +114,16 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
       }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
     end
 
+    it "fails when expected tag key is missing" do
+      expect {
+        expect {
+          Rails.event.tagged(other_key: "value") do
+            Rails.event.notify("user.created", { id: 123 })
+          end
+        }.to have_reported_event("user.created").with_tags(request_id: /.*/)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
     it "raises ArgumentError when with_tags is called with non-Hash" do
       expect {
         have_reported_event("user.created").with_tags("invalid")

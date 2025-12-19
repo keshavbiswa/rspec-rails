@@ -92,6 +92,8 @@ module RSpec
             return false unless actual.is_a?(Hash)
 
             expected.all? do |k, v|
+              return false unless actual.key?(k)
+
               actual_value = actual[k]
               if allow_regexp && v.is_a?(Regexp)
                 actual_value.to_s.match?(v)
