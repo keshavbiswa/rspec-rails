@@ -15,8 +15,8 @@ module RSpec
 
           class << self
             def emit(event)
-              event_recorders&.each do |events|
-                events << Event.new(event)
+              event_recorders&.each do |recorder|
+                recorder << Event.new(event)
               end
               true
             end
@@ -124,11 +124,12 @@ module RSpec
             when :no_events
               "expected an event to be reported, but there were no events reported"
             when :no_match
-              message = "expected an event to be reported matching:\n"
-              message += "  name: #{@expected_name.inspect}\n"
-              message += "but none of the #{@events.size} reported event(s) matched:\n"
-              message += @events.map { |e| "  #{e.inspect}" }.join("\n")
-              message
+              [
+                "expected an event to be reported matching:",
+                "  name: #{@expected_name.inspect}",
+                "but none of the #{@events.size} reported event(s) matched:",
+                *@events.map { |e| "  #{e.inspect}" }
+              ].join("\n")
             end
           end
 
