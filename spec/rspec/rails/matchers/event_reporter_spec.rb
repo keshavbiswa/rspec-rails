@@ -353,6 +353,12 @@ RSpec.describe "have_reported_events", skip: !RSpec::Rails::FeatureCheck.has_eve
 end
 
 RSpec.describe "with_debug_event_reporting", skip: !RSpec::Rails::FeatureCheck.has_event_reporter? do
+  around do |example|
+    original_debug_mode = ActiveSupport.event_reporter.debug_mode?
+    example.run
+    ActiveSupport.event_reporter.debug_mode = original_debug_mode
+  end
+
   it "enables debug events within the block" do
     with_debug_event_reporting do
       expect {
@@ -362,41 +368,26 @@ RSpec.describe "with_debug_event_reporting", skip: !RSpec::Rails::FeatureCheck.h
   end
 
   it "does not report debug events when debug_mode is disabled" do
-    original_debug_mode = ActiveSupport.event_reporter.debug_mode?
     ActiveSupport.event_reporter.debug_mode = false
-    begin
-      expect {
-        Rails.event.debug("debug.event", { data: "test" })
-      }.to have_reported_no_event("debug.event")
-    ensure
-      ActiveSupport.event_reporter.debug_mode = original_debug_mode
-    end
+    expect {
+      Rails.event.debug("debug.event", { data: "test" })
+    }.to have_reported_no_event("debug.event")
   end
 
   it "reports debug events when debug_mode is enabled via with_debug_event_reporting" do
-    original_debug_mode = ActiveSupport.event_reporter.debug_mode?
     ActiveSupport.event_reporter.debug_mode = false
-    begin
-      with_debug_event_reporting do
-        expect {
-          Rails.event.debug("debug.event", { data: "test" })
-        }.to have_reported_event("debug.event")
-      end
-    ensure
-      ActiveSupport.event_reporter.debug_mode = original_debug_mode
+    with_debug_event_reporting do
+      expect {
+        Rails.event.debug("debug.event", { data: "test" })
+      }.to have_reported_event("debug.event")
     end
   end
 
   it "restores original debug_mode after the block" do
-    original_debug_mode = ActiveSupport.event_reporter.debug_mode?
     ActiveSupport.event_reporter.debug_mode = false
-    begin
-      with_debug_event_reporting do
-        expect(ActiveSupport.event_reporter.debug_mode?).to be_truthy
-      end
-      expect(ActiveSupport.event_reporter.debug_mode?).to be_falsey
-    ensure
-      ActiveSupport.event_reporter.debug_mode = original_debug_mode
+    with_debug_event_reporting do
+      expect(ActiveSupport.event_reporter.debug_mode?).to be_truthy
     end
+    expect(ActiveSupport.event_reporter.debug_mode?).to be_falsey
   end
 end
