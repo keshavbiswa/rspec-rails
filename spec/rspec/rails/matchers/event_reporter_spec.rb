@@ -130,4 +130,32 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
       }.to raise_error(ArgumentError, /with_tags requires a Hash/)
     end
   end
+
+  describe "negation" do
+    it "passes when event is not reported" do
+      expect {
+        Rails.event.notify("user.updated", { id: 123 })
+      }.not_to have_reported_event("user.created")
+    end
+
+    it "passes when no events are reported" do
+      expect { }.not_to have_reported_event("user.created")
+    end
+
+    it "fails when event is reported" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 123 })
+        }.not_to have_reported_event("user.created")
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected no event matching "user.created" to be reported/)
+    end
+
+    it "fails when any event is reported and no name specified" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 123 })
+        }.not_to have_reported_event
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected no event to be reported, but one was found/)
+    end
+  end
 end
