@@ -267,3 +267,83 @@ RSpec.describe "have_reported_no_event", skip: !RSpec::Rails::FeatureCheck.has_e
     end
   end
 end
+
+RSpec.describe "have_reported_events", skip: !RSpec::Rails::FeatureCheck.has_event_reporter? do
+  describe "basic matching" do
+    it "passes when all events are reported" do
+      expect {
+        Rails.event.notify("user.created", { id: 123 })
+        Rails.event.notify("email.sent", { to: "user@example.com" })
+      }.to have_reported_events([
+        { name: "user.created", payload: { id: 123 } },
+        { name: "email.sent" }
+      ])
+    end
+
+    it "passes regardless of order" do
+      expect {
+        Rails.event.notify("email.sent", { to: "user@example.com" })
+        Rails.event.notify("user.created", { id: 123 })
+      }.to have_reported_events([
+        { name: "user.created", payload: { id: 123 } },
+        { name: "email.sent" }
+      ])
+    end
+
+    it "fails when no events are reported" do
+      expect {
+        expect { }.to have_reported_events([
+          { name: "user.created" }
+        ])
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /no events reported/)
+    end
+
+    it "fails when some events are missing" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 123 })
+        }.to have_reported_events([
+          { name: "user.created" },
+          { name: "email.sent" }
+        ])
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /some were missing/)
+    end
+  end
+
+  describe "with tags matching" do
+    it "supports tag matching with regex" do
+      expect {
+        Rails.event.tagged(request_id: "123") do
+          Rails.event.notify("user.created", { id: 123 })
+          Rails.event.notify("email.sent", { to: "user@example.com" })
+        end
+      }.to have_reported_events([
+        { name: "user.created", tags: { request_id: /\d+/ } },
+        { name: "email.sent" }
+      ])
+    end
+  end
+
+  describe "negation" do
+    it "passes when not all events are reported" do
+      expect {
+        Rails.event.notify("user.created", { id: 123 })
+      }.not_to have_reported_events([
+        { name: "user.created" },
+        { name: "email.sent" }
+      ])
+    end
+
+    it "fails when all events are reported" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 123 })
+          Rails.event.notify("email.sent", { to: "user@example.com" })
+        }.not_to have_reported_events([
+          { name: "user.created" },
+          { name: "email.sent" }
+        ])
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected events not to be reported, but all were found/)
+    end
+  end
+end

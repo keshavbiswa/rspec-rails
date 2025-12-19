@@ -298,6 +298,90 @@ module RSpec
             parts.join(", ")
           end
         end
+
+        # @api private
+        #
+        # Matcher class for `have_reported_events`. Should not be instantiated directly.
+        #
+        # @see RSpec::Rails::Matchers#have_reported_events
+        class HaveReportedEvents < Base
+          def initialize(expected_events)
+            super()
+            @expected_events = expected_events
+          end
+
+          def matches?(block)
+            @events = EventCollector.record(&block)
+
+            if @events.empty?
+              @failure_reason = :no_events
+              return false
+            end
+
+            @missing_events = find_missing_events
+            if @missing_events.empty?
+              true
+            else
+              @failure_reason = :missing_events
+              false
+            end
+          end
+
+          def failure_message
+            case @failure_reason
+            when :no_events
+              "expected #{@expected_events.size} event(s) to be reported, but there were no events reported"
+            when :missing_events
+              <<~MSG.chomp
+                expected all events to be reported, but some were missing:
+                #{formatted_missing_events}
+                reported events:
+                #{formatted_events}
+              MSG
+            end
+          end
+
+          def failure_message_when_negated
+            "expected events not to be reported, but all were found"
+          end
+
+          def description
+            "report #{@expected_events.size} event(s)"
+          end
+
+          private
+
+          def find_missing_events
+            remaining_events = @events.dup
+            missing = []
+
+            @expected_events.each do |expected|
+              match_index = remaining_events.find_index do |event|
+                event.matches?(expected[:name], expected[:payload], expected[:tags])
+              end
+
+              if match_index
+                remaining_events.delete_at(match_index)
+              else
+                missing << expected
+              end
+            end
+
+            missing
+          end
+
+          def formatted_missing_events
+            @missing_events.map { |e| "  #{format_expected_event(e)}" }.join("\n")
+          end
+
+          def format_expected_event(expected)
+            parts = []
+            parts << "name: #{expected[:name].inspect}" if expected[:name]
+            parts << "payload: #{expected[:payload].inspect}" if expected[:payload]
+            parts << "tags: #{expected[:tags].inspect}" if expected[:tags]
+            parts.join(", ")
+          end
+        end
       end
 
       # @api public
@@ -345,6 +429,36 @@ module RSpec
       # @return [HaveReportedNoEvent]
       def have_reported_no_event(name = nil)
         EventReporter::HaveReportedNoEvent.new(name)
+      end
+
+      # @api public
+      # Passes if the block reports all specified events (order-agnostic).
+      #
+      # @example Basic usage
+      #   expect {
+      #     Rails.event.notify("user.created", { id: 123 })
+      #     Rails.event.notify("email.sent", { to: "user@example.com" })
+      #   }.to have_reported_events([
+      #     { name: "user.created", payload: { id: 123 } },
+      #     { name: "email.sent" }
+      #   ])
+      #
+      # @example With tags matching (supports Regexp)
+      #   expect {
+      #     Rails.event.tagged(request_id: "123") do
+      #       Rails.event.notify("user.created", { id: 123 })
+      #       Rails.event.notify("email.sent", { to: "user@example.com" })
+      #     end
+      #   }.to have_reported_events([
+      #     { name: "user.created", tags: { request_id: /\d+/ } },
+      #     { name: "email.sent" }
+      #   ])
+      #
+      # @param expected_events [Array<Hash>] array of expected event specifications
+      #   Each hash can have :name, :payload, and :tags keys
+      # @return [HaveReportedEvents]
+      def have_reported_events(expected_events)
+        EventReporter::HaveReportedEvents.new(expected_events)
       end
     end
   end
