@@ -194,6 +194,14 @@ module RSpec
             end
           end
 
+          def failure_message_when_negated
+            if @expected_name
+              "expected no event matching #{@expected_name.inspect} to be reported, but one was found"
+            else
+              "expected no event to be reported, but one was found"
+            end
+          end
+
           def description
             desc = "report event"
             desc += " #{@expected_name.inspect}" if @expected_name
