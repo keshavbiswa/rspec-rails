@@ -70,7 +70,7 @@ module RSpec
           end
 
           def matches?(name, payload = nil)
-            return false if name&.to_s != event_data[:name]
+            return false if name && name.to_s != event_data[:name]
             return false if payload && !matches_payload?(payload)
 
             true
@@ -79,6 +79,8 @@ module RSpec
           private
 
           def matches_payload?(expected_payload)
+            return false unless event_data[:payload].is_a?(Hash)
+
             expected_payload.all? do |key, value|
               event_data[:payload][key] == value
             end
@@ -144,10 +146,8 @@ module RSpec
             when :no_events
               "expected an event to be reported, but there were no events reported"
             when :no_match
-              lines = [
-                "expected an event to be reported matching:",
-                "  name: #{@expected_name.inspect}"
-              ]
+              lines = ["expected an event to be reported matching:"]
+              lines << "  name: #{@expected_name.inspect}" if @expected_name
               lines << "  payload: #{@expected_payload.inspect}" if @expected_payload
               lines << "but none of the #{@events.size} reported event(s) matched:"
               lines.concat(@events.map { |e| "  #{e.inspect}" })
@@ -156,7 +156,8 @@ module RSpec
           end
 
           def description
-            desc = "report event #{@expected_name.inspect}"
+            desc = "report event"
+            desc += " #{@expected_name.inspect}" if @expected_name
             desc += " with payload #{@expected_payload.inspect}" if @expected_payload
             desc
           end

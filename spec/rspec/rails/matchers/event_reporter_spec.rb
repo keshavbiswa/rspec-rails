@@ -1,4 +1,16 @@
 RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_event_reporter? do
+  describe "without name matching" do
+    it "passes when any event is reported" do
+      expect { Rails.event.notify("user.created", { id: 123 }) }.to have_reported_event
+    end
+
+    it "fails when no events are reported" do
+      expect {
+        expect { }.to have_reported_event
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /no events reported/)
+    end
+  end
+
   describe "basic name matching" do
     it "passes when event is reported" do
       expect { Rails.event.notify("user.created", { id: 123 }) }.to have_reported_event("user.created")
@@ -40,6 +52,14 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
       expect {
         expect {
           Rails.event.notify("user.created", { id: 456 })
+        }.to have_reported_event("user.created").with_payload(id: 123)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
+    it "fails when event payload is nil" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", nil)
         }.to have_reported_event("user.created").with_payload(id: 123)
       }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
     end
