@@ -107,12 +107,42 @@ module RSpec
         # @api private
         # Base class for event reporter matchers.
         class Base < RSpec::Rails::Matchers::BaseMatcher
+          def initialize
+            super()
+            @expected_payload = nil
+            @expected_tags = nil
+          end
+
           def supports_value_expectations?
             false
           end
 
           def supports_block_expectations?
             true
+          end
+
+          # @api public
+          # Specifies the expected payload.
+          #
+          # @param payload [Hash] expected payload keys and values
+          # @return [self] self for chaining
+          # @raise [ArgumentError] if payload is not a Hash
+          def with_payload(payload)
+            require_hash_argument(payload, :with_payload)
+            @expected_payload = payload
+            self
+          end
+
+          # @api public
+          # Specifies the expected tags (supports Regexp values for matching).
+          #
+          # @param tags [Hash] expected tag keys and values (values can be Regexp)
+          # @return [self] self for chaining
+          # @raise [ArgumentError] if tags is not a Hash
+          def with_tags(tags)
+            require_hash_argument(tags, :with_tags)
+            @expected_tags = tags
+            self
           end
 
           private
@@ -137,32 +167,6 @@ module RSpec
           def initialize(expected_name)
             super()
             @expected_name = expected_name
-            @expected_payload = nil
-            @expected_tags = nil
-          end
-
-          # @api public
-          # Specifies the expected payload
-          #
-          # @param payload [Hash] expected payload keys and values
-          # @return [HaveReportedEvent] self for chaining
-          # @raise [ArgumentError] if payload is not a Hash
-          def with_payload(payload)
-            require_hash_argument(payload, :with_payload)
-            @expected_payload = payload
-            self
-          end
-
-          # @api public
-          # Specifies the expected tags (supports Regexp values)
-          #
-          # @param tags [Hash] expected tag keys and values (values can be Regexp)
-          # @return [HaveReportedEvent] self for chaining
-          # @raise [ArgumentError] if tags is not a Hash
-          def with_tags(tags)
-            require_hash_argument(tags, :with_tags)
-            @expected_tags = tags
-            self
           end
 
           def matches?(block)
@@ -235,32 +239,6 @@ module RSpec
           def initialize(expected_name = nil)
             super()
             @expected_name = expected_name
-            @expected_payload = nil
-            @expected_tags = nil
-          end
-
-          # @api public
-          # Specifies the payload to match against (for filtering).
-          #
-          # @param payload [Hash] payload keys and values
-          # @return [HaveReportedNoEvent] self for chaining
-          # @raise [ArgumentError] if payload is not a Hash
-          def with_payload(payload)
-            require_hash_argument(payload, :with_payload)
-            @expected_payload = payload
-            self
-          end
-
-          # @api public
-          # Specifies the tags to match against (for filtering).
-          #
-          # @param tags [Hash] tag keys and values
-          # @return [HaveReportedNoEvent] self for chaining
-          # @raise [ArgumentError] if tags is not a Hash
-          def with_tags(tags)
-            require_hash_argument(tags, :with_tags)
-            @expected_tags = tags
-            self
           end
 
           def matches?(block)
@@ -314,7 +292,7 @@ module RSpec
 
           def match_description
             parts = []
-            parts << @expected_name.inspect if @expected_name
+            parts << "name: #{@expected_name.inspect}" if @expected_name
             parts << "payload: #{@expected_payload.inspect}" if @expected_payload
             parts << "tags: #{@expected_tags.inspect}" if @expected_tags
             parts.join(", ")

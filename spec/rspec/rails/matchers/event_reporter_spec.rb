@@ -187,7 +187,7 @@ RSpec.describe "have_reported_no_event", skip: !RSpec::Rails::FeatureCheck.has_e
         expect {
           Rails.event.notify("user.created", { id: 123 })
         }.to have_reported_no_event("user.created")
-      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected no event matching "user.created" to be reported/)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected no event matching name: "user.created" to be reported/)
     end
   end
 
@@ -263,7 +263,7 @@ RSpec.describe "have_reported_no_event", skip: !RSpec::Rails::FeatureCheck.has_e
         expect {
           Rails.event.notify("user.updated", { id: 123 })
         }.not_to have_reported_no_event("user.created")
-      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected an event matching "user.created" to be reported/)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /expected an event matching name: "user.created" to be reported/)
     end
   end
 end
