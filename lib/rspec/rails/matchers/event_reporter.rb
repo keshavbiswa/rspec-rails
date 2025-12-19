@@ -69,10 +69,21 @@ module RSpec
             "#{event_data[:name]} (payload: #{event_data[:payload].inspect})"
           end
 
-          def matches?(name)
-            return true if name.nil?
+          def matches?(name, payload = nil)
+            return false if name && name.to_s != event_data[:name]
+            return false if payload && !matches_payload?(payload)
 
-            name.to_s == event_data[:name]
+            true
+          end
+
+          private
+
+          def matches_payload?(expected_payload)
+            return false unless event_data[:payload].is_a?(Hash)
+
+            expected_payload.all? do |key, value|
+              event_data[:payload][key] == value
+            end
           end
         end
 
@@ -97,6 +108,22 @@ module RSpec
           def initialize(expected_name)
             super()
             @expected_name = expected_name
+            @expected_payload = nil
+          end
+
+          # @api public
+          # Specifies the expected payload
+          #
+          # @param payload [Hash] expected payload keys and values
+          # @return [HaveReportedEvent] self for chaining
+          # @raise [ArgumentError] if payload is not a Hash
+          def with_payload(payload)
+            unless payload.is_a?(Hash)
+              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
+            end
+
+            @expected_payload = payload
+            self
           end
 
           def matches?(block)
@@ -108,7 +135,7 @@ module RSpec
             end
 
             @matching_event = @events.find do |event|
-              event.matches?(@expected_name)
+              event.matches?(@expected_name, @expected_payload)
             end
 
             if @matching_event
@@ -124,17 +151,20 @@ module RSpec
             when :no_events
               "expected an event to be reported, but there were no events reported"
             when :no_match
-              [
-                "expected an event to be reported matching:",
-                "  name: #{@expected_name.inspect}",
-                "but none of the #{@events.size} reported event(s) matched:",
-                *@events.map { |e| "  #{e.inspect}" }
-              ].join("\n")
+              lines = ["expected an event to be reported matching:"]
+              lines << "  name: #{@expected_name.inspect}" if @expected_name
+              lines << "  payload: #{@expected_payload.inspect}" if @expected_payload
+              lines << "but none of the #{@events.size} reported event(s) matched:"
+              lines.concat(@events.map { |e| "  #{e.inspect}" })
+              lines.join("\n")
             end
           end
 
           def description
-            "report event #{@expected_name.inspect}"
+            desc = "report event"
+            desc += " #{@expected_name.inspect}" if @expected_name
+            desc += " with payload #{@expected_payload.inspect}" if @expected_payload
+            desc
           end
         end
       end
@@ -145,6 +175,11 @@ module RSpec
       # @example Basic usage
       #   expect { Rails.event.notify("user.created", { id: 123 }) }
       #     .to have_reported_event("user.created")
+      #
+      # @example With payload matching
+      #   expect { Rails.event.notify("user.created", { id: 123, name: "John" }) }
+      #     .to have_reported_event("user.created")
+      #     .with_payload(id: 123)
       #
       # @param name [String, Symbol] the expected event name
       # @return [HaveReportedEvent]

@@ -1,4 +1,16 @@
 RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_event_reporter? do
+  describe "without name matching" do
+    it "passes when any event is reported" do
+      expect { Rails.event.notify("user.created", { id: 123 }) }.to have_reported_event
+    end
+
+    it "fails when no events are reported" do
+      expect {
+        expect { }.to have_reported_event
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /no events reported/)
+    end
+  end
+
   describe "basic name matching" do
     it "passes when event is reported" do
       expect { Rails.event.notify("user.created", { id: 123 }) }.to have_reported_event("user.created")
@@ -20,6 +32,42 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
           Rails.event.notify("user.updated", { id: 123 })
         }.to have_reported_event("user.created")
       }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+  end
+
+  describe "with payload matching" do
+    it "passes with matching payload" do
+      expect {
+        Rails.event.notify("user.created", { id: 123, name: "John" })
+      }.to have_reported_event("user.created").with_payload(id: 123)
+    end
+
+    it "passes with partial payload matching" do
+      expect {
+        Rails.event.notify("user.created", { id: 123, name: "John", email: "john@example.com" })
+      }.to have_reported_event("user.created").with_payload(id: 123, name: "John")
+    end
+
+    it "fails when payload doesn't match" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 456 })
+        }.to have_reported_event("user.created").with_payload(id: 123)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
+    it "fails when event payload is nil" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", nil)
+        }.to have_reported_event("user.created").with_payload(id: 123)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+
+    it "raises ArgumentError when with_payload is called with non-Hash" do
+      expect {
+        have_reported_event("user.created").with_payload("invalid")
+      }.to raise_error(ArgumentError, /with_payload requires a Hash/)
     end
   end
 end
