@@ -22,4 +22,26 @@ RSpec.describe "have_reported_event", skip: !RSpec::Rails::FeatureCheck.has_even
       }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
     end
   end
+
+  describe "with payload matching" do
+    it "passes with matching payload" do
+      expect {
+        Rails.event.notify("user.created", { id: 123, name: "John" })
+      }.to have_reported_event("user.created").with_payload(id: 123)
+    end
+
+    it "passes with partial payload matching" do
+      expect {
+        Rails.event.notify("user.created", { id: 123, name: "John", email: "john@example.com" })
+      }.to have_reported_event("user.created").with_payload(id: 123, name: "John")
+    end
+
+    it "fails when payload doesn't match" do
+      expect {
+        expect {
+          Rails.event.notify("user.created", { id: 456 })
+        }.to have_reported_event("user.created").with_payload(id: 123)
+      }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /none of the 1 reported event\(s\) matched/)
+    end
+  end
 end
