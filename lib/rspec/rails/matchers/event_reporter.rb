@@ -210,6 +210,101 @@ module RSpec
             desc
           end
         end
+
+        # @api private
+        #
+        # Matcher class for `have_reported_no_event`. Should not be instantiated directly.
+        #
+        # @see RSpec::Rails::Matchers#have_reported_no_event
+        class HaveReportedNoEvent < Base
+          def initialize(expected_name = nil)
+            super()
+            @expected_name = expected_name
+            @expected_payload = nil
+            @expected_tags = nil
+          end
+
+          # @api public
+          # Specifies the payload to match against (for filtering).
+          #
+          # @param payload [Hash] payload keys and values
+          # @return [HaveReportedNoEvent] self for chaining
+          # @raise [ArgumentError] if payload is not a Hash
+          def with_payload(payload)
+            unless payload.is_a?(Hash)
+              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
+            end
+
+            @expected_payload = payload
+            self
+          end
+
+          # @api public
+          # Specifies the tags to match against (for filtering).
+          #
+          # @param tags [Hash] tag keys and values
+          # @return [HaveReportedNoEvent] self for chaining
+          # @raise [ArgumentError] if tags is not a Hash
+          def with_tags(tags)
+            unless tags.is_a?(Hash)
+              raise ArgumentError, "with_tags requires a Hash, got #{tags.class}"
+            end
+
+            @expected_tags = tags
+            self
+          end
+
+          def matches?(block)
+            @events = EventCollector.record(&block)
+
+            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
+              # No filters - expect no events at all
+              @events.empty?
+            else
+              # Filters specified - expect no matching events
+              @matching_event = @events.find do |event|
+                event.matches?(@expected_name, @expected_payload, @expected_tags)
+              end
+              @matching_event.nil?
+            end
+          end
+
+          def failure_message
+            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
+              lines = ["expected no events to be reported, but #{@events.size} event(s) were reported:"]
+              lines.concat(@events.map { |e| "  #{e.inspect}" })
+              lines.join("\n")
+            else
+              "expected no event matching #{match_description} to be reported, but found:\n  #{@matching_event.inspect}"
+            end
+          end
+
+          def failure_message_when_negated
+            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
+              "expected at least one event to be reported, but none were"
+            else
+              "expected an event matching #{match_description} to be reported, but none were found"
+            end
+          end
+
+          def description
+            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
+              "report no events"
+            else
+              "report no event matching #{match_description}"
+            end
+          end
+
+          private
+
+          def match_description
+            parts = []
+            parts << @expected_name.inspect if @expected_name
+            parts << "payload: #{@expected_payload.inspect}" if @expected_payload
+            parts << "tags: #{@expected_tags.inspect}" if @expected_tags
+            parts.join(", ")
+          end
+        end
       end
 
       # @api public
@@ -236,6 +331,27 @@ module RSpec
       # @return [HaveReportedEvent]
       def have_reported_event(name = nil)
         EventReporter::HaveReportedEvent.new(name)
+      end
+
+      # @api public
+      # Passes if the block reports no events (or no events matching the criteria).
+      #
+      # @example Basic usage - no events at all
+      #   expect { }.to have_reported_no_event
+      #
+      # @example With specific event name
+      #   expect { Rails.event.notify("other.event", {}) }
+      #     .to have_reported_no_event("user.created")
+      #
+      # @example With payload filtering
+      #   expect { Rails.event.notify("user.created", { id: 456 }) }
+      #     .to have_reported_no_event("user.created")
+      #     .with_payload(id: 123)
+      #
+      # @param name [String, Symbol, nil] the event name to filter (optional)
+      # @return [HaveReportedNoEvent]
+      def have_reported_no_event(name = nil)
+        EventReporter::HaveReportedNoEvent.new(name)
       end
     end
   end
