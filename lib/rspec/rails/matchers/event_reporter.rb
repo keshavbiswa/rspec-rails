@@ -114,6 +114,14 @@ module RSpec
           def supports_block_expectations?
             true
           end
+
+          private
+
+          def require_hash_argument(value, method_name)
+            return if value.is_a?(Hash)
+
+            raise ArgumentError, "#{method_name} requires a Hash, got #{value.class}"
+          end
         end
 
         # @api private
@@ -136,10 +144,7 @@ module RSpec
           # @return [HaveReportedEvent] self for chaining
           # @raise [ArgumentError] if payload is not a Hash
           def with_payload(payload)
-            unless payload.is_a?(Hash)
-              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
-            end
-
+            require_hash_argument(payload, :with_payload)
             @expected_payload = payload
             self
           end
@@ -151,10 +156,7 @@ module RSpec
           # @return [HaveReportedEvent] self for chaining
           # @raise [ArgumentError] if tags is not a Hash
           def with_tags(tags)
-            unless tags.is_a?(Hash)
-              raise ArgumentError, "with_tags requires a Hash, got #{tags.class}"
-            end
-
+            require_hash_argument(tags, :with_tags)
             @expected_tags = tags
             self
           end
@@ -231,10 +233,7 @@ module RSpec
           # @return [HaveReportedNoEvent] self for chaining
           # @raise [ArgumentError] if payload is not a Hash
           def with_payload(payload)
-            unless payload.is_a?(Hash)
-              raise ArgumentError, "with_payload requires a Hash, got #{payload.class}"
-            end
-
+            require_hash_argument(payload, :with_payload)
             @expected_payload = payload
             self
           end
@@ -246,10 +245,7 @@ module RSpec
           # @return [HaveReportedNoEvent] self for chaining
           # @raise [ArgumentError] if tags is not a Hash
           def with_tags(tags)
-            unless tags.is_a?(Hash)
-              raise ArgumentError, "with_tags requires a Hash, got #{tags.class}"
-            end
-
+            require_hash_argument(tags, :with_tags)
             @expected_tags = tags
             self
           end
@@ -257,45 +253,47 @@ module RSpec
           def matches?(block)
             @events = EventCollector.record(&block)
 
-            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
-              # No filters - expect no events at all
-              @events.empty?
-            else
-              # Filters specified - expect no matching events
+            if has_filters?
               @matching_event = @events.find do |event|
                 event.matches?(@expected_name, @expected_payload, @expected_tags)
               end
               @matching_event.nil?
+            else
+              @events.empty?
             end
           end
 
           def failure_message
-            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
+            if has_filters?
+              "expected no event matching #{match_description} to be reported, but found:\n  #{@matching_event.inspect}"
+            else
               lines = ["expected no events to be reported, but #{@events.size} event(s) were reported:"]
               lines.concat(@events.map { |e| "  #{e.inspect}" })
               lines.join("\n")
-            else
-              "expected no event matching #{match_description} to be reported, but found:\n  #{@matching_event.inspect}"
             end
           end
 
           def failure_message_when_negated
-            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
-              "expected at least one event to be reported, but none were"
-            else
+            if has_filters?
               "expected an event matching #{match_description} to be reported, but none were found"
+            else
+              "expected at least one event to be reported, but none were"
             end
           end
 
           def description
-            if @expected_name.nil? && @expected_payload.nil? && @expected_tags.nil?
-              "report no events"
-            else
+            if has_filters?
               "report no event matching #{match_description}"
+            else
+              "report no events"
             end
           end
 
           private
+
+          def has_filters?
+            @expected_name || @expected_payload || @expected_tags
+          end
 
           def match_description
             parts = []
